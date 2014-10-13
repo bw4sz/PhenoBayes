@@ -1,0 +1,50 @@
+---
+title: 'Pollinator mediated competition: Comparing phylogeny, traits and environment
+  in cloud forest plants.'
+author: "Ben Weinstein"
+date: "Monday, October 13, 2014"
+output: html_document
+---
+
+# Rationale
+Cloud forest plant assemblages are among the richness worldwide. Hummingbird visited plants make up a large percentage of the plant assemblage. Previous work has shown that hummingbirds feed on plants that match corollas based on bill length. This suggests that plants with similiar corolla morphologies compete for pollination resources. To minimize competition between species, as well as decrease amount of pollen loss due to heterospecific transfer, there should be selection for minimal overlap in flowering timing. While this has been evaluated within a single genus (Stiles 1975) there has been little work in combining relatedness, environment and morphol- ogy in a single framework.
+
+## Approach
+
+We collected flower abundance for hummingbird visited flowers along a 1300m elevation gradient in northern ecuador.
+
+<img src="https://lh5.googleusercontent.com/-A_IrguUUUxo/UhskPLhTGKI/AAAAAAAABEA/njPD9WiSGVk/w958-h773-no/IMG_8612.JPG" alt="Drawing" style="width: 300px;"/><img src="https://lh5.googleusercontent.com/-D44D4F1HuNI/UhspjAOzG1I/AAAAAAAABT8/JVNkMBYXP8c/w958-h719-no/P7241696.JPG" alt="Drawing" style="width: 300px;"/> <img src="https://lh6.googleusercontent.com/YiT6fbrpCztsEGtqRwqVKeIXNBSiVCtyACY5yWbiFfE=w958-h719-no" alt="Drawing" style="width: 300px;"/>
+
+
+We measured three flower morphology traits for each species: corolla width, corolla length and height of plant from ground.
+
+<center> <img src="https://lh3.googleusercontent.com/-dU3zsYfwwtY/UhspWyi-SwI/AAAAAAAABTU/zJi1HCe3O24/w958-h719-no/P7211629.JPG" alt="Drawing" style="width: 300px;"/> </center>
+
+#Data
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE,d}
+require(knitr)
+require(ggplot2)
+require(plyr)
+require(vegan)
+require(picante)
+require(xtable)
+opts_chunk$set(warning=FALSE,message=FALSE,dpi=300)
+```
+
+```{r,echo=FALSE}
+dat<-read.csv("C:/Users/Ben/Dropbox/Thesis/Maquipucuna_SantaLucia/Results/FlowerTransects/CleanedHolgerTransect.csv",row.names=1)
+head(dat[,c("Iplant_Double","Total_Flowers","Date")])
+```
+
+##Flower abundance of top ten species
+```{r,results='asis'}
+abun_table<-table(dat$Iplant_Double)
+ta<-as.data.frame(sort(abun_table,decreasing = TRUE)[1:10])
+colnames(ta)<-c("Abundance")
+print(xtable(ta),type="html",include.rownames=TRUE)
+```
+
+##Flower abundance changes throughout the year and along the elevation gradient.
+
+![](C:\Users\Ben\Dropbox\Thesis\Maquipucuna_SantaLucia\Results\FlowerTransects\FlowerElevations_Holger.jpeg)

@@ -34,6 +34,7 @@ require(vegan)
 require(picante)
 require(xtable)
 opts_chunk$set(warning=FALSE,message=FALSE,dpi=300)
+setwd("C:/Users/Ben/Documents/PhenoBayes/")
 ```
 
 ```{r,echo=FALSE,dpi=50}
@@ -63,7 +64,17 @@ The abundance of plants is models as a log normal distribution instead of a pois
 ##Outline of Steps
 This analysis needs to broken down into several tractable steps.
 
-1. Model of all plants abundance as a function of intercept + elevation
+1. Model of all plants abundance as a function of intercept + elevation where the model process is considered to follow a poisson.
+
+$$Abundance \sim  Poisson(\lambda) $$
+
+$$\lambda \sim Intercept + \beta_1 * Elevation $$
+
+\[intercept \sim Gamma(0.001,.0001) \] 
+\[\beta_1 \sim Gamma(0.001,.0001) \] 
+
+2. Model of all plants abundance as a function of intercept + elevation where the model process is considered a logNormal
+
 $$Abundance \sim  LogN(\mu,\sigma) $$
 
 $$\mu \sim Intercept + \beta_1 * Elevation $$
@@ -74,7 +85,7 @@ $$\mu \sim Intercept + \beta_1 * Elevation $$
 
 Sigma is drawn as a gamma, because the conjugate of lognormal is a gamma.Hopefully this will help convergence.
 
-2. Model of all plants abundance as a function of intercept + elevation + Julian Day. The Julian day needs to be transformed?
+3. Model of all plants abundance as a function of intercept + elevation + Julian Day. The Julian day needs to be transformed?
 
 $$Abundance \sim  LogN(\mu,\sigma) $$
 
@@ -87,7 +98,7 @@ $$ \text{Julian Day} \sim U(0,365) $$
 \[\beta_2 \sim N(0,.0001) \] 
 
 
-3. Model of all plants abundance as a function of intercept + elevation + Julian Day. Sigma is modeled as function of Morphology of co-occurring species. This now considered a hierichical model. 
+4. Model of all plants abundance as a function of intercept + elevation + Julian Day. Sigma is modeled as function of Morphology of co-occurring species. This now considered a hierichical model. 
 
 $$Abundance \sim  LogN(\mu,\sigma) $$
 
@@ -103,4 +114,268 @@ With the errors:
 $$ \lambda \sim Intercept + \beta_3 * \text{Morphology of Co-occurring Species}$$
 $$ \beta_3 \sim N(0,0.0001)$$
 
-4. Model of all plants abundance as a function of intercept + elevation + Julian Day. Sigma is modeled as function of Morphology of co-occurring species. A random effect of species is added for each species. Where does this go!
+5. Model of all plants abundance as a function of intercept + elevation + Julian Day. Sigma is modeled as function of Morphology of co-occurring species. A random effect of species is added for each species. Where does this go!
+
+##Analysis
+```{r}
+d<-read.csv("C:/Users/Ben/Dropbox/Thesis/Maquipucuna_SantaLucia/Results/FlowerTransects/FlowerTransectClean.csv",row.names=1)
+
+#remove missing or infinite data
+d<-d[is.finite(d$Total_Flowers),]
+d<-d[is.finite(d$ele),]
+d<-d[!d$Total_Flowers==0,]
+
+```
+
+Sampling structure throughout the year
+```{r}
+ggplot(d,aes(y=ele,x=as.Date(d$Date_F))) + geom_point() + theme_bw() + scale_x_date() + labs(x="Date")
+```
+
+##Step 1 Bayesian model of elevation of all species combined using a Poisson
+
+###Visualize data
+```{r}
+ggplot(d,aes(x=ele,y=Total_Flowers)) + geom_point() + geom_smooth(method="lm") + labs(x="Elevation",y="Flower Abundance") + geom_smooth(method="glm",family="poisson",formula=y~poly(x,2)) 
+```
+
+```{r,cache=TRUE,echo=TRUE}
+#############################
+# Step #1: Load all the libraries
+#############################
+
+library(R2jags)
+library(abind)
+
+#############################
+# Step #2: Set the working directory, and the directory where JAGS lives
+
+# source("Model1.R")
+# setwd("C:/Users/Ben/Documents/PhenoBayes/")
+# 
+# sink("flower.jags")
+# 
+# cat("
+#     model {
+#     for(i in 1:length(y)){
+#     y[i] ~ dpois(mu[i])
+#     mu[i] <- alpha + beta * Elevation[i] + beta2*pow(Elevation[i],2)
+# }
+#   alpha ~ dgamma(0.001,0.001)
+#   beta ~ dgamma(0.001,0.001)
+#   beta2 ~ dgamma(0.001,0.001)
+# 
+#     }",fill = TRUE)
+# 
+# sink()
+
+#############################
+# Step #4: Make a list where you include all the data the model will need to run
+#############################
+
+Dat <- list(
+  y=as.integer(round(d$Total_Flowers,2)),
+  Elevation=d$ele
+)
+
+#############################
+# Step #5: Make a function (with no inputs) where you put a list of parameters and their initial values
+#############################
+
+InitStage <- function() {list(alpha=1500,beta=0.1,beta2=0.1)}
+
+#############################
+#Make a column vector with the names of the parameters you want to track
+#############################
+
+ParsStage <- c("alpha","beta",'beta2')
+
+#############################
+#Set the variables for the MCMC
+#############################
+
+ni <- 5000  # number of draws from the posterior
+nt <- 1    #thinning rate
+nb <- 2000  # number to discard for burn-in
+nc <- 2  # number of chains
+
+#############################
+#Run the jags function to run the code
+#############################
+
+m = jags(inits=InitStage,
+         n.chains=nc,
+         model.file="flower.jags",
+         working.directory=getwd(),
+         data=Dat,
+         parameters.to.save=ParsStage,
+         n.thin=nt,
+         n.iter=ni,
+         n.burnin=nb,
+         DIC=T)
+
+```
+
+###View model
+```{r}
+m
+```
+
+###Reshape data
+```{r}
+require(reshape2)
+pars<-melt(m$BUGSoutput$sims.array[,,c('alpha','beta','beta2')])
+colnames(pars)<-c("Draw","Chain","parameter","estimate")
+```
+
+##Visualize chains
+```{r,cache=FALSE,fig.width=11,fig.height=2}
+require(ggplot2)
+ggplot(pars,aes(x=Draw,y=estimate,col=factor(Chain))) + geom_point(size=.5) + geom_line() + ggtitle("Chains") + facet_wrap(~parameter,scales="free") + theme_bw() + labs(col="Chain")
+```
+
+##Histogram of Posteriors
+```{r,cache=FALSE}
+require(ggplot2)
+ggplot(pars,aes(x=estimate)) + geom_histogram() + ggtitle("Estimate of parameters") + facet_wrap(~parameter,scale="free") + theme_bw() 
+```
+
+##Plot the data and the bayesian best fit line
+```{r}
+#reformat for to sample posteriors
+post<-dcast(pars,...~parameter)
+#sample 1000 rows from the posterior
+sample.post<-post[sample(1:nrow(post),1000),]
+head(sample.post)
+
+#for each year multiply the value by the sample of the posterior
+confidence.years<-lapply(s$Year,function(x){
+  sample.post$alpha + sample.post$beta * x + sample.post$beta*x^2
+})
+
+names(confidence.years)<-s$Year
+
+#reformat for ggplot
+confidence<-melt(confidence.years)
+
+#name and make year a number
+colnames(confidence)<-c("Estimate","Year")
+confidence$Year<-as.numeric(confidence$Year)
+
+#Get the mean value for each year to plot
+mean_year<-as.numeric(tapply(confidence$Estimate,confidence$Year,mean))
+
+#calculate the central 95th CI interval
+quantile_year<-sapply(confidence.years,function(x){
+   quantile(x,c(0.025,0.975))}
+)
+
+my<-data.frame(Year=s$Year,mean_year,t(quantile_year))
+colnames(my)<-c("Year","mean","lower","upper")
+
+p<-ggplot(confidence,aes(x=Year,y=Estimate))+ theme_bw() + geom_line(data=my,aes(x=Year,y=mean,group=1),col="red")+ geom_point(data=my,aes(x=Year,y=mean,group=1),col="red",size=3) + geom_line(data=my,aes(x=Year,y=lower,group=1),col="blue",linetype='dashed') + geom_line(data=my,aes(x=Year,y=upper,group=1),col="blue",linetype='dashed') + ggtitle("Confidence Interval for y~Year") 
+
+#Add original data
+p <-p + geom_point(data=s,aes(x=Year,y=Aquilegia.canadensis),size=3)
+
+p
+```
+
+##Step 2 Bayesian model of elevation of all species combined using a LogNormal
+
+```{r,cache=TRUE,echo=TRUE,eval=FALSE}
+#############################
+# Step #1: Load all the libraries
+#############################
+
+library(R2jags)
+library(abind)
+
+#############################
+# Step #2: Set the working directory, and the directory where JAGS lives
+
+source("Model2.R")
+setwd("C:/Users/Ben/Documents/PhenoBayes/")
+
+sink("flower.jags")
+
+cat("
+    model {
+    for(i in 1:length(y)){
+    y[i] ~ dlnorm(mu[i],tau)
+    mu[i] <- alpha + beta * Elevation[i]
+}
+  alpha ~ dnorm(0.001,0.001)
+  beta ~ dnorm(0.001,0.001)
+  tau ~ dgamma(0.001,0.001)
+
+    }",fill = TRUE)
+
+sink()
+
+#############################
+#Make a list where you include all the data the model will need to run
+#############################
+
+Dat <- list(
+  y=as.integer(round(d$Total_Flowers,2)),
+  Elevation=d$ele
+)
+
+#############################
+#Make a function (with no inputs) where you put a list of parameters and their initial values
+#############################
+
+InitStage <- function() {list(alpha=1.52,beta=1,tau=0.0001)}
+
+#############################
+#Make a column vector with the names of the parameters you want to track
+#############################
+
+ParsStage <- c("alpha","beta","tau")
+
+#############################
+#Set the variables for the MCMC
+#############################
+
+ni <- 10000  # number of draws from the posterior
+nt <- 1    #thinning rate
+nb <- 2000  # number to discard for burn-in
+nc <- 2  # number of chains
+
+#############################
+#Run the jags function to run the code
+#############################
+
+m = jags(inits=InitStage,
+         n.chains=nc,
+         model.file="flower.jags",
+         working.directory=getwd(),
+         data=Dat,
+         parameters.to.save=ParsStage,
+         n.thin=nt,
+         n.iter=ni,
+         n.burnin=nb,
+         DIC=T)
+
+```
+
+###Reshape data
+```{r,eval=FALSE}
+require(reshape2)
+m
+pars<-melt(m$BUGSoutput$sims.array[,,c('alpha','beta',"tau")])
+colnames(pars)<-c("Draw","Chain","parameter","estimate")
+```
+
+##Visualize chains
+```{r,cache=FALSE,fig.width=11,fig.height=2,eval=FALSE}
+require(ggplot2)
+ggplot(pars,aes(x=Draw,y=estimate,col=factor(Chain))) + geom_point(size=.5) + geom_line() + ggtitle("Chains") + facet_wrap(~parameter,scales="free") + theme_bw() + labs(col="Chain")
+```
+
+##Histogram of Posteriors
+```{r,cache=FALSE,eval=FALSE}
+require(ggplot2)
+ggplot(pars,aes(x=estimate)) + geom_histogram() + ggtitle("Estimate of parameters") + facet_wrap(~parameter,scale="free") + theme_bw() 
+```

@@ -1,0 +1,15 @@
+
+    model {
+    
+    for(i in 1:length(y)){
+    y[i] ~ dpois(mu[Species[i]])
+    }
+
+    for(z in 1:length(Species)){
+    log(mu[z]) <- alpha.z + beta.z * Year[[Species[z]]
+    }
+
+    alpha.z ~ dnorm(0,0.0001)
+    beta.z ~ dnorm(0,0.0001)
+
+    }

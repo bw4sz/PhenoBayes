@@ -6,12 +6,11 @@ cat("
     model {
     for(i in 1:length(y)){
     y[i] ~ dpois(mu[i])
-    mu[i] <- alpha + beta * Elevation[i] + beta2*pow(Elevation[i],2)
+    log(mu[i]) <- alpha + beta * Elevation[i] + beta2 * Elevation[i]^2
 }
-  alpha ~ dgamma(0.001,0.001)
-  beta ~ dgamma(0.001,0.001)
-  beta2 ~ dgamma(0.001,0.001)
-
+  alpha ~ dnorm(0,0.001)
+  beta ~ dnorm(0,0.001)
+beta2~dnorm(0,0.001)
     }",fill = TRUE)
 
 sink()

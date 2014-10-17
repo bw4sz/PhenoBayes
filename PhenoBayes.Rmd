@@ -18,7 +18,7 @@ Cloud forest plant assemblages are among the richness worldwide. Hummingbird vis
 
 We collected flower abundance for hummingbird visited flowers along a 1300m elevation gradient in northern ecuador.
 
-<img src="https://lh5.googleusercontent.com/-A_IrguUUUxo/UhskPLhTGKI/AAAAAAAABEA/njPD9WiSGVk/w958-h773-no/IMG_8612.JPG" alt="Drawing" style="width: 300px;"/><img src="https://lh5.googleusercontent.com/-D44D4F1HuNI/UhspjAOzG1I/AAAAAAAABT8/JVNkMBYXP8c/w958-h719-no/P7241696.JPG" alt="Drawing" style="width: 300px;"/> <img src="https://lh6.googleusercontent.com/YiT6fbrpCztsEGtqRwqVKeIXNBSiVCtyACY5yWbiFfE=w958-h719-no" alt="Drawing" style="width: 300px;"/>
+<img src="https://lh5.googleusercontent.com/-A_IrguUUUxo/UhskPLhTGKI/AAAAAAAABEA/njPD9WiSGVk/w958-h773-no/IMG_8612.JPG" alt="Drawing" style="width: 300px;"/><img src="https://lh5.googleusercontent.com/-D44D4F1HuNI/UhspjAOzG1I/AAAAAAAABT8/JVNkMBYXP8c/w958-h719-no/P7241696.JPG" alt="Drawing" style="width: 300px;"/> 
 
 
 We measured three flower morphology traits for each species: corolla width, corolla length and height of plant from ground.
@@ -33,14 +33,19 @@ require(plyr)
 require(vegan)
 require(picante)
 require(xtable)
+require(chron)
 opts_chunk$set(warning=FALSE,message=FALSE,dpi=300)
 setwd("C:/Users/Ben/Documents/PhenoBayes/")
 ```
 
 ```{r,echo=FALSE,dpi=50}
 dat<-read.csv("C:/Users/Ben/Dropbox/Thesis/Maquipucuna_SantaLucia/Results/FlowerTransects/CleanedHolgerTransect.csv",row.names=1)
+
+#just get holger's data
+dat<-dat[dat$Observer=="Holger",]
 ggplot(dat,aes(x=Total_Flowers)) + geom_histogram() + ggtitle("Histogram of Flower Abundance")
 ggplot(dat,aes(x=log(Total_Flowers))) + geom_histogram() + ggtitle("Histogram of Log Abundance")
+
 ```
 
 ## Seasonality
@@ -50,7 +55,11 @@ Flower abundance changes throughout the year and along the elevation gradient.
 
 #Model Formulation
 
-$$Abundance \sim Elevation + Julian Day + Error$$
+$$ Let \frac{Abundance}{transect} = \theta$$
+
+Our goal is to explain the the number of flowers per transect based on elevation, date, species, and co-occurring species.
+
+$$  \theta \sim Elevation + Julian Day + Error$$
 
 \[Error \sim \text {Morphology of Co-occurring Species}\]
 
@@ -58,55 +67,39 @@ The goal of the analysis is to measure the effect of this error term on shaping 
 
 The abundance of plants is models as a log normal distribution instead of a poisson to have control over the variance term.
 
-\[Abundance \sim LogN(\mu,\sigma) \]
-
+\[\theta \sim Poisson(\lambda) \]
 
 ##Outline of Steps
 This analysis needs to broken down into several tractable steps.
 
 1. Model of all plants abundance as a function of intercept + elevation where the model process is considered to follow a poisson.
 
-$$Abundance \sim  Poisson(\lambda) $$
+$$\theta \sim  Poisson(\lambda) $$
 
-$$\lambda \sim Intercept + \beta_1 * Elevation $$
-
-\[intercept \sim Gamma(0.001,.0001) \] 
-\[\beta_1 \sim Gamma(0.001,.0001) \] 
-
-2. Model of all plants abundance as a function of intercept + elevation where the model process is considered a logNormal
-
-$$Abundance \sim  LogN(\mu,\sigma) $$
-
-$$\mu \sim Intercept + \beta_1 * Elevation $$
+$$log(\lambda) \sim Intercept + \beta_1 * Elevation $$
 
 \[intercept \sim N(0,.0001) \] 
 \[\beta_1 \sim N(0,.0001) \] 
-\[\sigma \sim Gamma(0.0001,.0001) \] 
 
-Sigma is drawn as a gamma, because the conjugate of lognormal is a gamma.Hopefully this will help convergence.
+2. Model of all plants abundance as a function of intercept + elevation + Julian Day. The Julian day needs to be transformed?
 
-3. Model of all plants abundance as a function of intercept + elevation + Julian Day. The Julian day needs to be transformed?
+$$\theta \sim  Poisson(\lambda) $$
 
-$$Abundance \sim  LogN(\mu,\sigma) $$
-
-$$\mu \sim Intercept + \beta_1 * Elevation + \beta_2 * \text{Julian Day}. $$
+$$log(\lambda) \sim Intercept + \beta_1 * Elevation + \beta_2 * \text{Julian Day} $$
 
 \[intercept \sim N(0,.0001) \] 
 \[\beta_1 \sim N(0,.0001) \] 
-\[\sigma \sim Gamma(0.0001,.0001) \] 
-$$ \text{Julian Day} \sim U(0,365) $$
 \[\beta_2 \sim N(0,.0001) \] 
 
 
 4. Model of all plants abundance as a function of intercept + elevation + Julian Day. Sigma is modeled as function of Morphology of co-occurring species. This now considered a hierichical model. 
 
-$$Abundance \sim  LogN(\mu,\sigma) $$
+$$\theta \sim  LogN(\mu,\sigma) $$
 
 $$\mu \sim Intercept + \beta_1 * Elevation + \beta_2 * \text{Julian Day}. $$
 
 \[intercept \sim N(0,.0001) \] 
 \[\beta_1 \sim N(0,.0001) \] 
-$$ \text{Julian Day} \sim U(0,365) $$
 \[\beta_2 \sim N(0,.0001) \] 
 
 With the errors:
@@ -114,75 +107,88 @@ With the errors:
 $$ \lambda \sim Intercept + \beta_3 * \text{Morphology of Co-occurring Species}$$
 $$ \beta_3 \sim N(0,0.0001)$$
 
-5. Model of all plants abundance as a function of intercept + elevation + Julian Day. Sigma is modeled as function of Morphology of co-occurring species. A random effect of species is added for each species. Where does this go!
+5. Model of all plants abundance as a function of intercept + elevation + Julian Day. Sigma is modeled as function of Morphology of co-occurring species. A random effect of species is added for each species. Is this written:
+
+$$\theta \sim  LogN(\mu,\sigma) $$
+
+$$\mu \sim Intercept + \beta_1 * Elevation + \beta_2 * \text{Julian Day}. $$
+
+\[intercept \sim N(0,.0001) \] 
+\[\beta_1 \sim N(0,.0001) \] 
+\[\beta_2 \sim N(0,.0001) \] 
+
+With the errors:
+\[\sigma \sim Gamma(lambda,.001)\]
+$$ \lambda \sim Intercept + \beta_3 * \text{Morphology of Co-occurring Species_ij + Species_i}$$
+$$ \beta_3 \sim N(0,0.0001)$$
+
+Where the random effect of Species is normally distribution
+$$Species_i \sim N(0,0.0001)$$
+
 
 ##Analysis
 ```{r}
-d<-read.csv("C:/Users/Ben/Dropbox/Thesis/Maquipucuna_SantaLucia/Results/FlowerTransects/FlowerTransectClean.csv",row.names=1)
 
 #remove missing or infinite data
-d<-d[is.finite(d$Total_Flowers),]
-d<-d[is.finite(d$ele),]
-d<-d[!d$Total_Flowers==0,]
+dat<-dat[is.finite(dat$Total_Flowers),]
+dat<-dat[!dat$Total_Flowers==0,]
 
+#Get the transect totals
+s.dat<-split(dat,list(dat$ID),drop=TRUE)
+
+total_flower<-rbind.fill(lapply(s.dat,function(x){
+  #mean elevation
+  Elev<-mean(as.numeric(strsplit(as.character(x$Transect_R),"_")[[1]]))
+  #Date
+  Date<-unique(x$Date)
+  #Total Number of Flowers
+  fl<-round(sum(x$Total_Flowers,na.rm=TRUE))
+  data.frame(Elev,Date,Flowers=fl,month=unique(x$month))
+}))
+
+#remove NA
+total_flower<-total_flower[!is.na(total_flower$Flowers),]
+total_flower$Date
 ```
 
-Sampling structure throughout the year
-```{r}
-ggplot(d,aes(y=ele,x=as.Date(d$Date_F))) + geom_point() + theme_bw() + scale_x_date() + labs(x="Date")
-```
+##Step 1 Bayesian model of elevation for all species combined using a Polynomial Poisson
 
-##Step 1 Bayesian model of elevation of all species combined using a Poisson
-
-###Visualize data
-```{r}
-ggplot(d,aes(x=ele,y=Total_Flowers)) + geom_point() + geom_smooth(method="lm") + labs(x="Elevation",y="Flower Abundance") + geom_smooth(method="glm",family="poisson",formula=y~poly(x,2)) 
-```
-
-```{r,cache=TRUE,echo=TRUE}
+```{r,echo=TRUE,eval=TRUE}
 #############################
-# Step #1: Load all the libraries
+# Load all the libraries
 #############################
 
 library(R2jags)
-library(abind)
 
-#############################
-# Step #2: Set the working directory, and the directory where JAGS lives
+setwd("C:/Users/Ben/Documents/PhenoBayes/")
 
-# source("Model1.R")
-# setwd("C:/Users/Ben/Documents/PhenoBayes/")
-# 
-# sink("flower.jags")
-# 
+source("Model1.R")
+
 # cat("
 #     model {
 #     for(i in 1:length(y)){
 #     y[i] ~ dpois(mu[i])
 #     mu[i] <- alpha + beta * Elevation[i] + beta2*pow(Elevation[i],2)
 # }
-#   alpha ~ dgamma(0.001,0.001)
-#   beta ~ dgamma(0.001,0.001)
-#   beta2 ~ dgamma(0.001,0.001)
+#   alpha ~ dnorm(0,0.001)
+#   beta ~ dnorm(0,0.001)
+#   beta2 ~ dnorm(0,0.001)
 # 
 #     }",fill = TRUE)
 # 
 # sink()
 
 #############################
-# Step #4: Make a list where you include all the data the model will need to run
+#Make a list where you include all the data the model will need to run
 #############################
 
 Dat <- list(
-  y=as.integer(round(d$Total_Flowers,2)),
-  Elevation=d$ele
+  y=total_flower$Flowers,
+  Elevation=total_flower$Elev
 )
 
 #############################
-# Step #5: Make a function (with no inputs) where you put a list of parameters and their initial values
-#############################
-
-InitStage <- function() {list(alpha=1500,beta=0.1,beta2=0.1)}
+#Initial Values
 
 #############################
 #Make a column vector with the names of the parameters you want to track
@@ -194,16 +200,16 @@ ParsStage <- c("alpha","beta",'beta2')
 #Set the variables for the MCMC
 #############################
 
-ni <- 5000  # number of draws from the posterior
+ni <- 10000  # number of draws from the posterior
 nt <- 1    #thinning rate
-nb <- 2000  # number to discard for burn-in
+nb <- 0  # number to discard for burn-in
 nc <- 2  # number of chains
 
 #############################
 #Run the jags function to run the code
 #############################
 
-m = jags(inits=InitStage,
+m = jags(
          n.chains=nc,
          model.file="flower.jags",
          working.directory=getwd(),
@@ -224,7 +230,7 @@ m
 ###Reshape data
 ```{r}
 require(reshape2)
-pars<-melt(m$BUGSoutput$sims.array[,,c('alpha','beta','beta2')])
+pars<-melt(m$BUGSoutput$sims.array[-c(1:2000),,c('alpha','beta','beta2')])
 colnames(pars)<-c("Draw","Chain","parameter","estimate")
 ```
 
@@ -249,90 +255,88 @@ sample.post<-post[sample(1:nrow(post),1000),]
 head(sample.post)
 
 #for each year multiply the value by the sample of the posterior
-confidence.years<-lapply(s$Year,function(x){
-  sample.post$alpha + sample.post$beta * x + sample.post$beta*x^2
+confidence.years<-lapply(total_flower$Elev,function(x){
+  exp(sample.post$alpha + sample.post$beta * x + sample.post$beta2*x^2)
 })
 
-names(confidence.years)<-s$Year
+names(confidence.years)<-total_flower$Elev
+
+means<-sapply(confidence.years,mean)
+
+#calculate the central 95th CI interval
+quantile_elev<-t(sapply(confidence.years,function(x){
+   quantile(x,c(0.025,0.975))}
+))
 
 #reformat for ggplot
 confidence<-melt(confidence.years)
 
 #name and make year a number
-colnames(confidence)<-c("Estimate","Year")
-confidence$Year<-as.numeric(confidence$Year)
+colnames(confidence)<-c("Estimate","Elev")
+confidence$Elev<-as.numeric(confidence$Elev)
 
-#Get the mean value for each year to plot
-mean_year<-as.numeric(tapply(confidence$Estimate,confidence$Year,mean))
+my<-data.frame(total_flower$Elev,means,quantile_elev)
+colnames(my)<-c("Elev","mean","lower","upper")
 
-#calculate the central 95th CI interval
-quantile_year<-sapply(confidence.years,function(x){
-   quantile(x,c(0.025,0.975))}
-)
-
-my<-data.frame(Year=s$Year,mean_year,t(quantile_year))
-colnames(my)<-c("Year","mean","lower","upper")
-
-p<-ggplot(confidence,aes(x=Year,y=Estimate))+ theme_bw() + geom_line(data=my,aes(x=Year,y=mean,group=1),col="red")+ geom_point(data=my,aes(x=Year,y=mean,group=1),col="red",size=3) + geom_line(data=my,aes(x=Year,y=lower,group=1),col="blue",linetype='dashed') + geom_line(data=my,aes(x=Year,y=upper,group=1),col="blue",linetype='dashed') + ggtitle("Confidence Interval for y~Year") 
+p<-ggplot(confidence,aes(x=Elev,y=Estimate))+ theme_bw() + geom_line(data=my,aes(x=Elev,y=mean,group=1),col="red") + geom_line(data=my,aes(x=Elev,y=lower,group=1),col="blue",linetype='dashed') + geom_line(data=my,aes(x=Elev,y=upper,group=1),col="blue",linetype='dashed') + ggtitle("Confidence Interval for y~Year") 
 
 #Add original data
-p <-p + geom_point(data=s,aes(x=Year,y=Aquilegia.canadensis),size=3)
+p <-p + geom_point(data=total_flower,aes(x=Elev,y=Flowers),size=3)
 
 p
 ```
 
-##Step 2 Bayesian model of elevation of all species combined using a LogNormal
+##Step 2 Bayesian model of elevation + Julian Day of all species combined using a Polynomial Poisson
 
-```{r,cache=TRUE,echo=TRUE,eval=FALSE}
+###Visualize data
+```{r}
+ggplot(total_flower,aes(x=month,y=Flowers,col=Elev)) + geom_point() + scale_color_continuous(low="blue",high="red")
+```
+
+```{r,echo=TRUE,eval=TRUE}
 #############################
-# Step #1: Load all the libraries
+# Load all the libraries
 #############################
 
 library(R2jags)
-library(abind)
 
-#############################
-# Step #2: Set the working directory, and the directory where JAGS lives
-
-source("Model2.R")
 setwd("C:/Users/Ben/Documents/PhenoBayes/")
 
-sink("flower.jags")
+source("Model2.R")
 
-cat("
-    model {
-    for(i in 1:length(y)){
-    y[i] ~ dlnorm(mu[i],tau)
-    mu[i] <- alpha + beta * Elevation[i]
-}
-  alpha ~ dnorm(0.001,0.001)
-  beta ~ dnorm(0.001,0.001)
-  tau ~ dgamma(0.001,0.001)
-
-    }",fill = TRUE)
-
-sink()
+# cat("
+#     model {
+#     for(i in 1:length(y)){
+#     y[i] ~ dpois(mu[i])
+#     mu[i] <- alpha + beta * Elevation[i] + beta2*pow(Elevation[i],2)
+# }
+#   alpha ~ dnorm(0,0.001)
+#   beta ~ dnorm(0,0.001)
+#   beta2 ~ dnorm(0,0.001)
+# 
+#     }",fill = TRUE)
+# 
+# sink()
 
 #############################
 #Make a list where you include all the data the model will need to run
 #############################
 
 Dat <- list(
-  y=as.integer(round(d$Total_Flowers,2)),
-  Elevation=d$ele
+  y=total_flower$Flowers,
+  Elevation=total_flower$Elev,
+    month=total_flower$month
 )
 
 #############################
-#Make a function (with no inputs) where you put a list of parameters and their initial values
-#############################
+#Initial Values
 
-InitStage <- function() {list(alpha=1.52,beta=1,tau=0.0001)}
 
 #############################
 #Make a column vector with the names of the parameters you want to track
 #############################
 
-ParsStage <- c("alpha","beta","tau")
+ParsStage <- c("alpha","beta",'beta2','beta3')
 
 #############################
 #Set the variables for the MCMC
@@ -340,14 +344,14 @@ ParsStage <- c("alpha","beta","tau")
 
 ni <- 10000  # number of draws from the posterior
 nt <- 1    #thinning rate
-nb <- 2000  # number to discard for burn-in
+nb <- 0  # number to discard for burn-in
 nc <- 2  # number of chains
 
 #############################
 #Run the jags function to run the code
 #############################
 
-m = jags(inits=InitStage,
+m = jags(
          n.chains=nc,
          model.file="flower.jags",
          working.directory=getwd(),
@@ -360,22 +364,68 @@ m = jags(inits=InitStage,
 
 ```
 
-###Reshape data
-```{r,eval=FALSE}
-require(reshape2)
+###View model
+```{r}
 m
-pars<-melt(m$BUGSoutput$sims.array[,,c('alpha','beta',"tau")])
+```
+
+###Reshape data
+```{r}
+require(reshape2)
+pars<-melt(m$BUGSoutput$sims.array[-c(1:2000),,c('alpha','beta','beta2','beta3')])
 colnames(pars)<-c("Draw","Chain","parameter","estimate")
 ```
 
 ##Visualize chains
-```{r,cache=FALSE,fig.width=11,fig.height=2,eval=FALSE}
+```{r,cache=FALSE,fig.width=11,fig.height=2}
 require(ggplot2)
 ggplot(pars,aes(x=Draw,y=estimate,col=factor(Chain))) + geom_point(size=.5) + geom_line() + ggtitle("Chains") + facet_wrap(~parameter,scales="free") + theme_bw() + labs(col="Chain")
 ```
 
 ##Histogram of Posteriors
-```{r,cache=FALSE,eval=FALSE}
+```{r,cache=FALSE}
 require(ggplot2)
 ggplot(pars,aes(x=estimate)) + geom_histogram() + ggtitle("Estimate of parameters") + facet_wrap(~parameter,scale="free") + theme_bw() 
+```
+
+##Plot the data and the bayesian best fit line
+```{r}
+#reformat for to sample posteriors
+post<-dcast(pars,...~parameter)
+#sample 1000 rows from the posterior
+sample.post<-post[sample(1:nrow(post),1000),]
+head(sample.post)
+
+#for each year multiply the value by the sample of the posterior
+confidence.years<-list()
+for (row in 1:nrow(total_flower)){
+  x<-total_flower[row,]
+  confidence.years[[row]]<-exp(sample.post$alpha + sample.post$beta * x$Elev + sample.post$beta2 * x$Elev^2 + sample.post$beta3*x$month)
+  }
+
+names(confidence.years)<-total_flower$Elev
+
+means<-sapply(confidence.years,mean)
+
+#calculate the central 95th CI interval
+quantile_elev<-t(sapply(confidence.years,function(x){
+   quantile(x,c(0.025,0.975))}
+))
+
+#reformat for ggplot
+confidence<-melt(confidence.years)
+
+#name and make year a number
+colnames(confidence)<-c("Estimate","Elev")
+confidence$Elev<-as.numeric(confidence$Elev)
+
+my<-data.frame(total_flower$Elev,means,quantile_elev)
+colnames(my)<-c("Elev","mean","lower","upper")
+
+p<-ggplot(confidence,aes(x=Elev,y=Estimate))+ theme_bw() + geom_line(data=my,aes(x=Elev,y=mean,group=1),col="red") + geom_line(data=my,aes(x=Elev,y=lower,group=1),col="blue",linetype='dashed') + geom_line(data=my,aes(x=Elev,y=upper,group=1),col="blue",linetype='dashed') + ggtitle("Confidence Interval for y~Year") 
+
+#Add original data
+p <-p + geom_point(data=total_flower,aes(x=Elev,y=Flowers),size=3)
+
+p
 ```

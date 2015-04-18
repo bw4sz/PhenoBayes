@@ -20,7 +20,6 @@ We collected flower abundance for hummingbird visited flowers along a 1300m elev
 
 <img src="https://lh5.googleusercontent.com/-A_IrguUUUxo/UhskPLhTGKI/AAAAAAAABEA/njPD9WiSGVk/w958-h773-no/IMG_8612.JPG" alt="Drawing" style="width: 300px;"/><img src="https://lh5.googleusercontent.com/-D44D4F1HuNI/UhspjAOzG1I/AAAAAAAABT8/JVNkMBYXP8c/w958-h719-no/P7241696.JPG" alt="Drawing" style="width: 300px;"/> 
 
-
 We measured three flower morphology traits for each species: corolla width, corolla length and height of plant from ground.
 
 <center> <img src="https://lh3.googleusercontent.com/-dU3zsYfwwtY/UhspWyi-SwI/AAAAAAAABTU/zJi1HCe3O24/w958-h719-no/P7211629.JPG" alt="Drawing" style="width: 300px;"/> </center>
@@ -28,8 +27,9 @@ We measured three flower morphology traits for each species: corolla width, coro
 
 ```{r,echo=FALSE,warning=FALSE,message=FALSE,d}
 require(knitr)
+library(R2jags)
 require(ggplot2)
-require(plyr)
+require(dplyr)
 require(vegan)
 require(picante)
 require(xtable)
@@ -43,15 +43,47 @@ dat<-read.csv("C:/Users/Ben/Dropbox/Thesis/Maquipucuna_SantaLucia/Results/Flower
 
 #just get holger's data
 dat<-dat[dat$Observer=="Holger",]
-ggplot(dat,aes(x=Total_Flowers)) + geom_histogram() + ggtitle("Histogram of Flower Abundance")
-ggplot(dat,aes(x=log(Total_Flowers))) + geom_histogram() + ggtitle("Histogram of Log Abundance")
 
 ```
+
+##Analysis
+```{r}
+#remove missing or infinite data
+dat<-dat[is.finite(dat$Total_Flowers),]
+dat<-dat[!dat$Total_Flowers==0,]
+
+#Reduce species for the moment
+keep<-names(which(table(dat$Iplant_Double)>40))
+dat<-dat[dat$Iplant_Double %in% keep,]
+
+groupdat<-group_by(dat,ID,Iplant_Double)
+tf<-summarise(groupdat,
+      Elev=mean(as.numeric(strsplit(as.character(Transect_R),"_")[[1]])),
+      Date=as.character(unique(Date)),
+      plants=round(sum(mean_Stalk,na.rm=TRUE)),
+      Flowers=round(sum(Total_Flowers,na.rm=TRUE)),
+      Year=unique(Year)
+)
+
+#format date
+ggplot(tf,aes(x=Date,y=Flowers)) + geom_point() + geom_smooth() + sca
+
+```
+
+##Abundance distributions for each species
+```{r}
+ggplot(total_flower,aes(x=Elev,y=Flowers)) + geom_point() + geom_smooth(method="glm",family="poisson", formula=y~poly(x,2))
+head(dat)
+
+aggregate(dat$dat[dat$Iplant_Double %in% keep,]
+ggplot(,aes(x=mean_Stalk,fill=Species)) + geom_histogram()
+```
+
 
 ## Seasonality
 Flower abundance changes throughout the year and along the elevation gradient.
 
-![](C:\Users\Ben\Dropbox\Thesis\Maquipucuna_SantaLucia\Results\FlowerTransects\FlowerElevations_Holger.jpeg)
+![](C:\Users\Ben\Dropbox\Thesis\Maquipucuna_SantaLucia\Results\FlowerTransects\FlowerElevationsHolger.jpeg)
 
 #Model Formulation
 
@@ -64,10 +96,6 @@ $$  \theta \sim Elevation + Julian Day + Error$$
 \[Error \sim \text {Morphology of Co-occurring Species}\]
 
 The goal of the analysis is to measure the effect of this error term on shaping abundance of species flowers. Additional analysis could also look at elevation/distance to a conspecific as promoting abundance. 
-
-The abundance of plants is models as a log normal distribution instead of a poisson to have control over the variance term.
-
-\[\theta \sim Poisson(\lambda) \]
 
 ##Outline of Steps
 This analysis needs to broken down into several tractable steps.
@@ -126,90 +154,52 @@ Where the random effect of Species is normally distribution
 $$Species_i \sim N(0,0.0001)$$
 
 
-##Analysis
+##Step 1 Simulated data for elevation
+
 ```{r}
+sim.dat<-data.frame(Elev=total_flower$Elev)
+#fit known polynomial model
+a=7
+beta1=-.00001
+beta2=-10
 
-#remove missing or infinite data
-dat<-dat[is.finite(dat$Total_Flowers),]
-dat<-dat[!dat$Total_Flowers==0,]
+sim.dat$M<-a + beta1*sim.dat$Elev+beta2*+sim.dat$Elev^2
+sim.dat$Flowers<-rpois(length(sim.dat$M),log(sim.dat$M))
 
-#Get the transect totals
-s.dat<-split(dat,list(dat$ID),drop=TRUE)
-
-total_flower<-rbind.fill(lapply(s.dat,function(x){
-  #mean elevation
-  Elev<-mean(as.numeric(strsplit(as.character(x$Transect_R),"_")[[1]]))
-  #Date
-  Date<-unique(x$Date)
-  #Total Number of Flowers
-  fl<-round(sum(x$Total_Flowers,na.rm=TRUE))
-  data.frame(Elev,Date,Flowers=fl,month=unique(x$month))
-}))
-
-#remove NA
-total_flower<-total_flower[!is.na(total_flower$Flowers),]
-total_flower$Date
+ggplot(sim.dat,aes(x=Elev,y=Flowers)) + geom_point() + geom_smooth(data=sim.dat,method="glm",family="poisson",formula=y~poly(x,2),col="red",linetype="dashed") 
 ```
 
-##Step 1 Bayesian model of elevation for all species combined using a Polynomial Poisson
-
 ```{r,echo=TRUE,eval=TRUE}
-#############################
-# Load all the libraries
-#############################
-
-library(R2jags)
-
-setwd("C:/Users/Ben/Documents/PhenoBayes/")
-
+#Source model
 source("Model1.R")
+print(readLines("Model1.R"))
 
-# cat("
-#     model {
-#     for(i in 1:length(y)){
-#     y[i] ~ dpois(mu[i])
-#     mu[i] <- alpha + beta * Elevation[i] + beta2*pow(Elevation[i],2)
-# }
-#   alpha ~ dnorm(0,0.001)
-#   beta ~ dnorm(0,0.001)
-#   beta2 ~ dnorm(0,0.001)
-# 
-#     }",fill = TRUE)
-# 
-# sink()
-
-#############################
-#Make a list where you include all the data the model will need to run
-#############################
-
+#Input data
 Dat <- list(
-  y=total_flower$Flowers,
+  y=rpois,
   Elevation=total_flower$Elev
 )
 
-#############################
-#Initial Values
-
-#############################
-#Make a column vector with the names of the parameters you want to track
-#############################
-
+#Parameters of interest
 ParsStage <- c("alpha","beta",'beta2')
 
-#############################
-#Set the variables for the MCMC
-#############################
+#Initial values
+InitStage <- function() {list(alpha=100,beta=1,beta2=1)}
+
+#############
+#MCMC options
+#############
 
 ni <- 10000  # number of draws from the posterior
 nt <- 1    #thinning rate
 nb <- 0  # number to discard for burn-in
 nc <- 2  # number of chains
 
-#############################
-#Run the jags function to run the code
-#############################
+###########
+#Run  jags
+###########
 
-m = jags(
+m = jags(inits=InitStage,
          n.chains=nc,
          model.file="flower.jags",
          working.directory=getwd(),
@@ -331,6 +321,7 @@ Dat <- list(
 #############################
 #Initial Values
 
+initials<-function(){list(alpha=1,beta=1)}
 
 #############################
 #Make a column vector with the names of the parameters you want to track

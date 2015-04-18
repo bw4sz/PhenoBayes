@@ -10,7 +10,8 @@ cat("
 }
   alpha ~ dnorm(0,0.001)
   beta ~ dnorm(0,0.001)
-beta2~dnorm(0,0.001)
+  beta2~dnorm(0,0.001)
+
     }",fill = TRUE)
 
 sink()
